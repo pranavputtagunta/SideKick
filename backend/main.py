@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
+from celery.result import AsyncResult
 
 import models, schemas, crud
 from database import SessionLocal, engine
+from celery_worker import add_together, celery_app
 
 # This command tells SQLAlchemy to create all the tables defined in models.py
 models.Base.metadata.create_all(bind=engine)
@@ -81,3 +83,19 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
 @app.get("/users/me/", response_model=schemas.User)
 async def read_current_user(current_user: schemas.User = Depends(get_current_user)):
     return current_user
+
+# Celery task endpoint
+@app.post("/tasks/add/")
+def run_add_task(a: int, b: int):
+    task = add_together.delay(a, b) # .delay() sends call as message to queue
+    return {"task_id": task.id} # return task's id, not output
+
+@app.get("/tasks/result/{task_id}")
+def get_task_result(task_id: str):
+    task_result = AsyncResult(task_id, app= celery_app) # get result by task id
+
+    return {
+        "task_id": task_id,
+        "status": task_result.status, # PENDING, STARTED, SUCCESS, FAILURE
+        "result": task_result.result # Contains error if failed, result if successful
+    }
