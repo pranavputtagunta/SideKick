@@ -1,21 +1,45 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
+# Forward References 
+class SkillInDB(BaseModel): 
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
+class BeltInDB(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
+class UserInDB(BaseModel):
+    id: int
+    name: str
+    email: str
+    class Config: 
+        from_attributes = True
+
+# Main Schemas
+
 # Schemas for UserAttempt
 class UserAttemptBase(BaseModel):
-    user_id: int
-    skill_id: int
     status: str
     score: Optional[float] = None
     user_video_url: Optional[str] = None
     feedback: Optional[str] = None
 
 class UserAttemptCreate(UserAttemptBase):
-    pass
+    skill_id: int
 
 class UserAttempt(UserAttemptBase):
     id: int
-
+    user_id: int
+    skill_id: int
+    # include indb versions
+    skill: SkillInDB
+    user: UserInDB
     class Config:
         from_attributes = True
 
@@ -27,12 +51,12 @@ class SkillBase(BaseModel):
     masters_tips: Optional[str] = None
 
 class SkillCreate(SkillBase):
-    belt_id: int
+    pass
 
 class Skill(SkillBase):
     id: int
     belt_id: int
-    attempts: List["UserAttempt"] = []
+    belt: BeltInDB
 
     class Config:
         from_attributes = True
@@ -66,4 +90,19 @@ class User(UserBase):
     attempts: List[UserAttempt] = []
 
     class Config:
+        from_attributes = True
+
+# POST Response Schemas
+
+class UserResponse(UserBase): 
+    id: int
+    current_belt_id: Optional[int] = None
+    # No attempts listed
+    class Config: 
+        from_attributes = True
+
+class SkillResponse(SkillBase):
+    id: int
+    belt_id: int
+    class Config: 
         from_attributes = True

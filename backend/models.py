@@ -11,8 +11,8 @@ class User(Base):
     email = Column(String, unique=True, index=True) # Will replace with Firebase UID later
     current_belt_id = Column(Integer, ForeignKey("belts.id"), nullable=True)
 
-    current_belt = relationship("Belt")
-    attempts = relationship("UserAttempt", back_populates="user")
+    current_belt = relationship("Belt", lazy="selectin")
+    attempts = relationship("UserAttempt", back_populates="user", lazy="selectin")
 
 class Belt(Base):
     __tablename__ = "belts"
@@ -21,7 +21,7 @@ class Belt(Base):
     name = Column(String, unique=True, index=True)
     rank_order = Column(Integer, unique=True)
 
-    skills = relationship("Skill", back_populates="belt")
+    skills = relationship("Skill", back_populates="belt", lazy="selectin")
 
 class Skill(Base):
     __tablename__ = "skills"
@@ -33,8 +33,8 @@ class Skill(Base):
     expert_landmarks_url = Column(String, nullable=True)
     masters_tips = Column(Text, nullable=True)
 
-    belt = relationship("Belt", back_populates="skills")
-    attempts = relationship("UserAttempt", back_populates="skill")
+    belt = relationship("Belt", back_populates="skills", lazy="selectin")
+    attempts = relationship("UserAttempt", back_populates="skill", lazy="selectin")
 
 class UserAttempt(Base):
     __tablename__ = "user_attempts"
@@ -47,5 +47,5 @@ class UserAttempt(Base):
     user_video_url = Column(String, nullable=True)
     feedback = Column(Text, nullable=True)
 
-    user = relationship("User", back_populates="attempts")
-    skill = relationship("Skill", back_populates="attempts")
+    user = relationship("User", back_populates="attempts", lazy="selectin")
+    skill = relationship("Skill", back_populates="attempts", lazy="selectin")
