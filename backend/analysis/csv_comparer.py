@@ -124,16 +124,12 @@ def calculate_distance(expert_df, user_df):
     return float(np.mean(distances))
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Compare two landmark CSV files using DTW.')
-    parser.add_argument('expert_csv', type=str, help='Path to the expert\'s landmark CSV file.')
-    parser.add_argument('user_csv', type=str, help='Path to the user\'s landmark CSV file.')
-    args = parser.parse_args()
+def compare_csv(expert_csv_path, user_csv_path):
 
     try:
         # Load and preprocess data
-        expert_data = load_and_preprocess_data(args.expert_csv)
-        user_data = load_and_preprocess_data(args.user_csv)
+        expert_data = load_and_preprocess_data(expert_csv_path)
+        user_data = load_and_preprocess_data(user_csv_path)
 
         # Normalize skeletons
         expert_normalized = normalize_skeleton(expert_data)
@@ -150,9 +146,7 @@ def main():
         print(f"Average Normalized Distance: {avg_distance:.5f}")
         print(f"Accuracy Score: {accuracy_percentage:.2f}%")
 
+        return {"average_distance": avg_distance, "accuracy_score": accuracy_percentage}
+
     except Exception as e:
         print(f"An error occurred: {e}")
-
-
-if __name__ == '__main__':
-    main()

@@ -23,6 +23,10 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.refresh(db_user)
     return db_user
 
+# Get skill by id
+def get_skill(db: Session, skill_id: int): 
+    return db.query(models.Skill).filter(models.Skill.id == skill_id).first()
+
 def get_skills_by_belt(db: Session, belt_id: int, skip: int = 0, limit: int = 100):
     return db.query(models.Skill).filter(models.Skill.belt_id == belt_id).offset(skip).limit(limit).all()
 
@@ -32,3 +36,15 @@ def create_skill_for_belt(db: Session, skill: schemas.SkillCreate, belt_id: int)
     db.commit()
     db.refresh(db_skill)
     return db_skill
+
+# Analysis crud operations
+def create_user_attempt(db: Session, skill_id: int, user_id: int): 
+    db_attempt = models.UserAttempt(
+        skill_id = skill_id,
+        user_id = user_id,
+        status = 'pending',
+    )
+    db.add(db_attempt)
+    db.commit()
+    db.refresh(db_attempt)
+    return db_attempt

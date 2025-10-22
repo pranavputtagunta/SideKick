@@ -1,10 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from celery.result import AsyncResult
 
+import os
+import shutil
+
 import models, schemas, crud
 from database import SessionLocal, engine
-from celery_worker import add_together, celery_app
+from celery_worker import *
 
 # This command tells SQLAlchemy to create all the tables defined in models.py
 models.Base.metadata.create_all(bind=engine)
@@ -99,3 +102,35 @@ def get_task_result(task_id: str):
         "status": task_result.status, # PENDING, STARTED, SUCCESS, FAILURE
         "result": task_result.result # Contains error if failed, result if successful
     }
+
+# Analysis endpoints
+@app.post("/analysis/start/{skill_id}/")
+async def start_analysis(
+    skill_id: int,
+    db: Session = Depends(get_db), 
+    current_user: schemas.User = Depends(get_current_user), 
+    video_file: UploadFile = File(...)
+): 
+    # 1. Create UserAttempt in DB
+    attempt = crud.create_user_attempt(db, skill_id=skill_id, user_id=current_user.id)
+
+    # 2. Save video to temp location
+    temp_dir = "temp_videos"
+    temp_csv_dir = "temp_csvs" 
+    os.makedirs(temp_dir, exist_ok=True)
+    os.makedirs(temp_csv_dir, exist_ok=True)
+    video_path = os.path.join(temp_dir, f"attempt_{attempt.id}_{video_file.filename}")
+    temp_csv_path = os.path.join(temp_csv_dir, f"attempt_{attempt.id}.csv")
+
+    with open(video_path, "wb") as buf: 
+        shutil.copyfileobj(video_file.file, buf) 
+
+    # 3. Call the Celery task to analyze video
+    task = analyze_video.delay(user_attempt_id = attempt.id, video_path= video_path, csv_path=temp_csv_path)
+
+    # 4. Return the task ID to the client
+    return {
+        "task_id": task.id,
+        "user_attempt_id": attempt.id,
+    }
+
