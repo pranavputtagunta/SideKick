@@ -82,7 +82,7 @@ def analyze_video(user_attempt_id: int, video_path: str, csv_path: str) -> dict:
 
     finally: 
         db.close()
-        
+
     # For now, return dummy result
     result = {
         "status": "complete"

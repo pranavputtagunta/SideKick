@@ -46,74 +46,161 @@ def draw_pose_landmarks(image, detection_result):
                     cv2.line(image, start_point, end_point, (200, 200, 50), 2)
     return image
 
-def analyze_video(video_path, output_csv_path):
-    """Analyzes the video to extract video landmarks."""
+def extract_landmarks_to_csv(video_path, output_csv_path, annotated_video_path= None, display=False): 
+    """
+    Analyzes the video to extract pose landmarks and saaves them
+    This version is headless and does not display video
+    """
     if not os.path.exists(POSE_MODEL_PATH):
         print(f"Pose model file not found at {POSE_MODEL_PATH}. Please ensure the model is available.")
         return
     
-    base_options = python.BaseOptions
-    pose_landmarker_options = vision.PoseLandmarkerOptions(
-        base_options=base_options(model_asset_path=POSE_MODEL_PATH),
+    base_options = python.BaseOptions(model_asset_path=POSE_MODEL_PATH)
+    options = vision.PoseLandmarkerOptions(
+        base_options=base_options,
         running_mode=vision.RunningMode.VIDEO,
         output_segmentation_masks=False
     )
 
-    with vision.PoseLandmarker.create_from_options(pose_landmarker_options) as pose_landmarker, \
-         open(output_csv_path, 'w', newline='') as csvfile:
-        
+    with vision.PoseLandmarker.create_from_options(options) as landmarker, \
+            open(output_csv_path, 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(['frame_number', 'timestamp_ms', 'landmark_name', 'visible', 'x', 'y', 'z'])
 
         cap = cv2.VideoCapture(video_path)
-
-        frame_number = 0
+        if not cap.isOpened():
+            print(f"Error opening video file: {video_path}")
+            return
+        
+        if annotated_video_path: 
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            out_video = cv2.VideoWriter(annotated_video_path, fourcc, fps, (width, height))
+        
+        frame_num = 0
         last_saved_ts = -MIN_FRAME_INTERVAL_MS * 2
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
 
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
             timestamp_ms = int(cap.get(cv2.CAP_PROP_POS_MSEC))
+            
+            should_save = True
+            # Downsample to target FPS
+            if (timestamp_ms - last_saved_ts) < MIN_FRAME_INTERVAL_MS:
+                should_save = False
+            else: 
+                last_saved_ts = timestamp_ms
 
-            pose_result = pose_landmarker.detect_for_video(mp_image, timestamp_ms)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
+            pose_result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-            # Downsample FPS to save CSV size
-            should_save = (timestamp_ms - last_saved_ts) >= MIN_FRAME_INTERVAL_MS
+            if annotated_video_path or display:
+                annotated_frame = draw_pose_landmarks(frame.copy(), pose_result)
+                if annotated_video_path:
+                    out_video.write(annotated_frame)
+                if display:
+                    cv2.imshow('Annotated Video', annotated_frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
 
             if should_save and getattr(pose_result, 'pose_landmarks', None):
-                for i, landmark_list in enumerate(pose_result.pose_landmarks):
+                for landmark_list in pose_result.pose_landmarks:
                     for j, landmark in enumerate(landmark_list):
                         lm_name = mp.solutions.pose.PoseLandmark(j).name
                         if lm_name in POSE_SAVE_LANDMARKS:
                             landmark_name = f'pose_{lm_name}'
                             csv_writer.writerow([
-                                frame_number,
+                                frame_num,
                                 timestamp_ms,
                                 landmark_name,
-                                round(float(landmark.visibility), 5),
+                                round(float(landmark.visibility), 5) if landmark.visibility is not None else 0.0,
                                 round(float(landmark.x), 5),
                                 round(float(landmark.y), 5),
                                 round(float(landmark.z), 5)
                             ])
-
-            if should_save:
-                last_saved_ts = timestamp_ms
-
-            # For demo visualization
-            vis_frame = draw_pose_landmarks(frame.copy(), pose_result)
-            cv2.imshow('Analyzer', vis_frame)
-
-            if cv2.waitKey(5) & 0xFF == 27:  # Press ESC to exit
-                break
-
-            frame_number += 1
-
+            frame_num += 1
         cap.release()
-        cv2.destroyAllWindows()
+        if annotated_video_path:
+            out_video.release()
+        if display:
+            cv2.destroyAllWindows()
+        print(f"Landmarks extracted and saved to {output_csv_path}")
+
+# def analyze_video(video_path, output_csv_path):
+#     """Analyzes the video to extract video landmarks."""
+#     if not os.path.exists(POSE_MODEL_PATH):
+#         print(f"Pose model file not found at {POSE_MODEL_PATH}. Please ensure the model is available.")
+#         return
+    
+#     base_options = python.BaseOptions
+#     pose_landmarker_options = vision.PoseLandmarkerOptions(
+#         base_options=base_options(model_asset_path=POSE_MODEL_PATH),
+#         running_mode=vision.RunningMode.VIDEO,
+#         output_segmentation_masks=False
+#     )
+
+#     with vision.PoseLandmarker.create_from_options(pose_landmarker_options) as pose_landmarker, \
+#          open(output_csv_path, 'w', newline='') as csvfile:
+        
+#         csv_writer = csv.writer(csvfile)
+#         csv_writer.writerow(['frame_number', 'timestamp_ms', 'landmark_name', 'visible', 'x', 'y', 'z'])
+
+#         cap = cv2.VideoCapture(video_path)
+
+#         frame_number = 0
+#         last_saved_ts = -MIN_FRAME_INTERVAL_MS * 2
+#         while cap.isOpened():
+#             ret, frame = cap.read()
+#             if not ret:
+#                 break
+
+#             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
+#             timestamp_ms = int(cap.get(cv2.CAP_PROP_POS_MSEC))
+
+#             pose_result = pose_landmarker.detect_for_video(mp_image, timestamp_ms)
+
+#             # Downsample FPS to save CSV size
+#             should_save = (timestamp_ms - last_saved_ts) >= MIN_FRAME_INTERVAL_MS
+
+#             if should_save and getattr(pose_result, 'pose_landmarks', None):
+#                 for i, landmark_list in enumerate(pose_result.pose_landmarks):
+#                     for j, landmark in enumerate(landmark_list):
+#                         lm_name = mp.solutions.pose.PoseLandmark(j).name
+#                         if lm_name in POSE_SAVE_LANDMARKS:
+#                             landmark_name = f'pose_{lm_name}'
+#                             csv_writer.writerow([
+#                                 frame_number,
+#                                 timestamp_ms,
+#                                 landmark_name,
+#                                 round(float(landmark.visibility), 5),
+#                                 round(float(landmark.x), 5),
+#                                 round(float(landmark.y), 5),
+#                                 round(float(landmark.z), 5)
+#                             ])
+
+#             if should_save:
+#                 last_saved_ts = timestamp_ms
+
+#             # For demo visualization
+#             vis_frame = draw_pose_landmarks(frame.copy(), pose_result)
+#             cv2.imshow('Analyzer', vis_frame)
+
+#             if cv2.waitKey(5) & 0xFF == 27:  # Press ESC to exit
+#                 break
+
+#             frame_number += 1
+
+#         cap.release()
+#         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    video_path = "backend/assets/my_front_kick.mp4"
+    video_path = "backend/assets/my_front_kick_cut.mp4"
+    expert_video_path = "backend/assets/front_kick.mp4"
     output_csv_path = 'backend/assets/my_front_kick.csv'
-    analyze_video(video_path, output_csv_path)
+    expert_output_csv_path = 'backend/assets/front_kick.csv'
+    extract_landmarks_to_csv(video_path, output_csv_path, annotated_video_path='backend/assets/my_front_kick_annotated.mp4', display=True)
+    extract_landmarks_to_csv(expert_video_path, expert_output_csv_path, annotated_video_path='backend/assets/front_kick_annotated.mp4', display=True)
